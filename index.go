@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"io/ioutil"
 	"labix.org/v2/mgo"
+	"labix.org/v2/mgo/bson"
 	"net/http"
 )
 
@@ -14,7 +15,7 @@ const (
 	GW2SPIDY_URL = "http://www.gw2spidy.com/api/v0.9/json/"
 )
 
-var templates = template.Must(template.ParseFiles("types.html", "main.html", "addSalvage.html", "addSalvageTypes.html"))
+var templates = template.Must(template.ParseFiles("main.html", "addSalvage.html", "addSalvageTypes.html"))
 
 ///////////////////////////////////////////////////////////////////////////////
 //
@@ -24,13 +25,19 @@ var templates = template.Must(template.ParseFiles("types.html", "main.html", "ad
 
 // Used to retrieve data from the salvage database
 type Salvage struct {
-	ID           string "ID"
-	SalvageCount string "SalvageCount"
+	ID           string     "ID"
+	SalvageCount string     "SalvageCount"
+	Materials    []Material "Materials"
+}
+
+type Material struct {
+	ID    string "ID"
+	Count string "Count"
 }
 
 // Used to retrieve lists of items from GW2Spidy
 type GW2SpidyItemList struct {
-	Count int                `json:"count"`
+	Count string             `json:"count"`
 	Items []GW2SpidyItemData `json:"results"`
 }
 
@@ -105,7 +112,51 @@ func addSalvateTypeHandler(response http.ResponseWriter, request *http.Request) 
 
 // Handles the addition of new salvage data
 func libAddSalvageHandler(response http.ResponseWriter, request *http.Request) {
+	// Connect to the database
+	session, err := mgo.Dial(DB_ADDR)
+	handleError(err, response, "Unable to connect to database")
+	defer session.Close()
 
+	// Parse out the query parameters to make them available in the Form
+	request.ParseForm()
+
+	itemID := request.Form.Get("ID")
+	salvageCount := request.Form.Get("SalvageCount")
+	mat1 := request.Form.Get("material1")
+	mat1Count := request.Form.Get("material1Count")
+	mat2 := request.Form.Get("material2")
+	mat2Count := request.Form.Get("material2Count")
+
+	// Grab our collection
+	c := session.DB("GuildWars2").C("salvage")
+	query := c.Find(bson.M{"ID": itemID})
+	count, err := query.Count()
+	result := Salvage{}
+
+	fmt.Println(count)
+
+	if count == 0 {
+		// Add the new entry to the database
+		result.ID = itemID
+		result.SalvageCount = salvageCount
+
+		if mat2 != "" {
+			result.Materials = make([]Material, 2)
+			fmt.Println("Adding mat2!", mat2, mat2Count)
+			result.Materials[1] = Material{mat2, mat2Count}
+		} else {
+			result.Materials = make([]Material, 1)
+		}
+
+		result.Materials[0] = Material{mat1, mat1Count}
+
+		err = c.Insert(result)
+		handleError(err, response, "Unable to insert new Salvage")
+	} else {
+		// Increment the current entry in the database
+		err = query.One(&result)
+		handleError(err, response, "Unable to parse Salvage from result")
+	}
 }
 
 // Handles the addition of new salvage material data
