@@ -12,8 +12,11 @@ import (
 )
 
 const (
-	DB_ADDR      = "127.0.0.1"
-	GW2SPIDY_URL = "http://www.gw2spidy.com/api/v0.9/json/"
+	DB_ADDR                = "127.0.0.1"
+	DB_NAME                = "GuildWars2"
+	COLLECTION_SALVAGE     = "salvage"
+	COLLECTION_SALVAGEMATS = "salvageMaterials"
+	GW2SPIDY_URL           = "http://www.gw2spidy.com/api/v0.9/json/"
 )
 
 var templates = template.Must(template.ParseFiles("main.html", "addSalvage.html", "addSalvageTypes.html"))
@@ -70,7 +73,7 @@ func addSalvageHandler(response http.ResponseWriter, request *http.Request) {
 	defer session.Close()
 
 	// Open up our collection
-	collection := session.DB("GuildWars2").C("salvageMaterials")
+	collection := session.DB(DB_NAME).C(COLLECTION_SALVAGEMATS)
 
 	// Pull out all the data in the database
 	var result []GW2SpidyItemData
@@ -122,16 +125,23 @@ func libAddSalvageHandler(response http.ResponseWriter, request *http.Request) {
 	request.ParseForm()
 
 	itemID := request.Form.Get("ID")
-	salvageCount, _ := strconv.Atoi(request.Form.Get("SalvageCount"))
+	salvageCount, err := strconv.Atoi(request.Form.Get("SalvageCount"))
+	handleError(err, response, "Atoi failure")
+
 	mat1 := request.Form.Get("material1")
-	mat1Count, _ := strconv.Atoi(request.Form.Get("material1Count"))
+	mat1Count, err := strconv.Atoi(request.Form.Get("material1Count"))
+	handleError(err, response, "Atoi failure")
+
 	mat2 := request.Form.Get("material2")
-	mat2Count, _ := strconv.Atoi(request.Form.Get("material2Count"))
+	mat2Count, err := strconv.Atoi(request.Form.Get("material2Count"))
+	handleError(err, response, "Atoi failure")
 
 	// Grab our collection
-	c := session.DB("GuildWars2").C("salvage")
+	c := session.DB(DB_NAME).C(COLLECTION_SALVAGE)
 	query := c.Find(bson.M{"ID": itemID})
 	count, err := query.Count()
+	handleError(err, response, "Unable to get count of documents found")
+
 	result := Salvage{}
 
 	if count == 0 {
@@ -183,6 +193,11 @@ func libAddSalvageHandler(response http.ResponseWriter, request *http.Request) {
 		err = c.Update(bson.M{"ID": itemID}, result)
 		handleError(err, response, "Update failed")
 	}
+
+	// Return to main page
+	// TODO: Return to a better page to show results/success
+	// TODO: Proper redirection
+	http.Redirect(response, request, "../main", http.StatusMovedPermanently)
 }
 
 // Handles the addition of new salvage material data
@@ -196,7 +211,7 @@ func libAddSalvageTypeHandler(response http.ResponseWriter, request *http.Reques
 	request.ParseForm()
 
 	// Grab our collection
-	c := session.DB("GuildWars2").C("salvageMaterials")
+	c := session.DB(DB_NAME).C(COLLECTION_SALVAGEMATS)
 	var itemData GW2SpidyItemData
 
 	// Loop through all query paramters and add them to the database
@@ -214,7 +229,7 @@ func libAddSalvageTypeHandler(response http.ResponseWriter, request *http.Reques
 	// Return to main page
 	// TODO: Return to a better page to show results/success
 	// TODO: Proper redirection
-	http.Redirect(response, request, "../main", http.StatusOK)
+	http.Redirect(response, request, "../main", http.StatusMovedPermanently)
 }
 
 ///////////////////////////////////////////////////////////////////////////////
