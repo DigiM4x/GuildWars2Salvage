@@ -8,6 +8,7 @@ import (
 	"labix.org/v2/mgo"
 	"labix.org/v2/mgo/bson"
 	"net/http"
+	"strconv"
 )
 
 const (
@@ -26,18 +27,18 @@ var templates = template.Must(template.ParseFiles("main.html", "addSalvage.html"
 // Used to retrieve data from the salvage database
 type Salvage struct {
 	ID           string     "ID"
-	SalvageCount string     "SalvageCount"
+	SalvageCount int        "SalvageCount"
 	Materials    []Material "Materials"
 }
 
 type Material struct {
 	ID    string "ID"
-	Count string "Count"
+	Count int    "Count"
 }
 
 // Used to retrieve lists of items from GW2Spidy
 type GW2SpidyItemList struct {
-	Count string             `json:"count"`
+	Count int                `json:"count"`
 	Items []GW2SpidyItemData `json:"results"`
 }
 
@@ -121,11 +122,11 @@ func libAddSalvageHandler(response http.ResponseWriter, request *http.Request) {
 	request.ParseForm()
 
 	itemID := request.Form.Get("ID")
-	salvageCount := request.Form.Get("SalvageCount")
+	salvageCount, _ := strconv.Atoi(request.Form.Get("SalvageCount"))
 	mat1 := request.Form.Get("material1")
-	mat1Count := request.Form.Get("material1Count")
+	mat1Count, _ := strconv.Atoi(request.Form.Get("material1Count"))
 	mat2 := request.Form.Get("material2")
-	mat2Count := request.Form.Get("material2Count")
+	mat2Count, _ := strconv.Atoi(request.Form.Get("material2Count"))
 
 	// Grab our collection
 	c := session.DB("GuildWars2").C("salvage")
@@ -133,22 +134,18 @@ func libAddSalvageHandler(response http.ResponseWriter, request *http.Request) {
 	count, err := query.Count()
 	result := Salvage{}
 
-	fmt.Println(count)
-
 	if count == 0 {
 		// Add the new entry to the database
 		result.ID = itemID
 		result.SalvageCount = salvageCount
 
-		if mat2 != "" {
-			result.Materials = make([]Material, 2)
-			fmt.Println("Adding mat2!", mat2, mat2Count)
-			result.Materials[1] = Material{mat2, mat2Count}
-		} else {
-			result.Materials = make([]Material, 1)
+		if mat1 != "" {
+			result.Materials = append(result.Materials, Material{ID: mat1, Count: mat1Count})
 		}
 
-		result.Materials[0] = Material{mat1, mat1Count}
+		if mat2 != "" {
+			result.Materials = append(result.Materials, Material{ID: mat2, Count: mat2Count})
+		}
 
 		err = c.Insert(result)
 		handleError(err, response, "Unable to insert new Salvage")
@@ -156,6 +153,35 @@ func libAddSalvageHandler(response http.ResponseWriter, request *http.Request) {
 		// Increment the current entry in the database
 		err = query.One(&result)
 		handleError(err, response, "Unable to parse Salvage from result")
+
+		result.SalvageCount += salvageCount
+		newMatStats := []Material{}
+
+		if mat1 != "" {
+			newMatStats = append(result.Materials, Material{ID: mat1, Count: mat1Count})
+		}
+
+		if mat2 != "" {
+			newMatStats = append(result.Materials, Material{ID: mat2, Count: mat2Count})
+		}
+
+		for m := range newMatStats {
+			found := false
+
+			for i := range result.Materials {
+				if newMatStats[m].ID == result.Materials[i].ID {
+					found = true
+					result.Materials[i].Count += newMatStats[m].Count
+				}
+			}
+
+			if found == false {
+				result.Materials = append(result.Materials, newMatStats[m])
+			}
+		}
+
+		err = c.Update(bson.M{"ID": itemID}, result)
+		handleError(err, response, "Update failed")
 	}
 }
 
