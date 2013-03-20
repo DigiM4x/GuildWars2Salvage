@@ -16,7 +16,7 @@ const (
 	GW2SPIDY_URL = "http://www.gw2spidy.com/api/v0.9/json/"
 )
 
-var templates = template.Must(template.ParseFiles("types.html", "main.html", "addSalvage.html", "addSalvageSuccess.html", "addSalvageTypes.html"))
+var templates = template.Must(template.ParseFiles("types.html", "main.html", "addSalvage.html", "addSalvageTypes.html"))
 
 ///////////////////////////////////////////////////////////////////////////////
 //

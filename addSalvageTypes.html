@@ -1,0 +1,11 @@
+<html>
+<body>
+<form method='POST' action='lib/addSalvageType'>
+<input type='submit' /><br />
+{{range .}}
+{{.Name}} <img src='{{.Img}}' /> <input type='checkbox' name='{{.DataID}}' value='{{.Name}}'/><br />
+{{end}}
+<br /><input type='submit' />
+</form>
+</body>
+</html>
