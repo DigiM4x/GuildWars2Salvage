@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"html/template"
 	"io/ioutil"
 	"labix.org/v2/mgo"
@@ -197,9 +196,10 @@ func libAddSalvageHandler(response http.ResponseWriter, request *http.Request) {
 	// Return to main page
 	// TODO: Return to a better page to show results/success
 	// TODO: Proper redirection
-	http.Redirect(response, request, "../main", http.StatusMovedPermanently)
+	http.Redirect(response, request, "../addSalvage", http.StatusFound)
 }
 
+/*
 // Handles the addition of new salvage material data
 func libAddSalvageTypeHandler(response http.ResponseWriter, request *http.Request) {
 	// Connect to the database
@@ -242,8 +242,8 @@ func libAddSalvageTypeHandler(response http.ResponseWriter, request *http.Reques
 	// Return to main page
 	// TODO: Return to a better page to show results/success
 	// TODO: Proper redirection
-	http.Redirect(response, request, "../main", http.StatusMovedPermanently)
-}
+	http.Redirect(response, request, "../addSalvage", http.StatusFound)
+}*/
 
 ///////////////////////////////////////////////////////////////////////////////
 //
