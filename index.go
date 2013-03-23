@@ -218,11 +218,24 @@ func libAddSalvageTypeHandler(response http.ResponseWriter, request *http.Reques
 	for id := range request.Form {
 		itemData.DataID = id
 		itemData.Name = request.Form.Get(id)
-		// TODO: Check for duplicates before inserting
+
+		query := c.Find(bson.M{"data_id": id})
+		count, err := query.Count()
+
+		if err != nil {
+			fmt.Println("Unable to check if there are duplicates of id", id, err.Error())
+			continue
+		}
+
+		if count > 0 {
+			fmt.Println("Avoid duplicate entry of id", id)
+			continue
+		}
+
 		err = c.Insert(itemData)
 
 		if err != nil {
-			fmt.Println("Unable to add id ", id, "to salvageMaterials. ", err.Error())
+			fmt.Println("Unable to add id ", id, "to salvageMaterials.", err.Error())
 		}
 	}
 
