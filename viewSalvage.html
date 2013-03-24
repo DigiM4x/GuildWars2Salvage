@@ -1,14 +1,22 @@
 <html>
 <head>
+	<link rel="stylesheet" href="gw2.css">
+	<script src="http://code.jquery.com/jquery-1.9.1.min.js"></script>
+	<script src="gw2library.js"></script>
 	<script type="text/javascript">
 		var materials = JSON.parse({{.MaterialJSON}});
 		var items = JSON.parse({{.ItemJSON}});
+
+		$(document).ready(function() {
+			for each (item in items) {
+				$("#tableHeader").after("<tr><td><img src='" + item.img + "' /></td><td>" + item.name + "</td><td>" + item.data_id + "</td><td>" + item.restriction_level + "</td><td>" + item.price_last_changed + "</td><td>" + formatPrice(item.max_offer_unit_price) + "</td><td>" + formatPrice(item.min_sale_unit_price) + "</td><td>" + item.offer_availability + "</td><td>" + item.sale_availability + "</td><td>" + formatPrice(item.sale_price_change_last_hour) + "</td><td>" + formatPrice(item.offer_price_change_last_hour) + "</td></tr>");
+			}
+		});
 	</script>
 </head>
 <body>
 	<table border="1">
-		<tr><td>Name</td><td>ID</td><td>Level</td></tr>
-		{{range .Items}}<tr><td>{{.Name}}</td><td>{{.DataID}}</td><td>{{.RestrictionLevel}}</td></tr>{{end}}
+		<tr id="tableHeader"><td>Image</td><td>Name</td><td>ID</td><td>Level</td><td>Price Last Changed</td><td>Max Offer Unit Price</td><td>Min Sale Unit Price</td><td>Offer Availability</td><td>Sale Availability</td><td>Sale Price Change Last Hour</td><td>Offer Price Change Last Hour</td></tr>
 	</table>
 </body>
 </html>
