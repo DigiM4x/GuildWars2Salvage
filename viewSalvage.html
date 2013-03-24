@@ -1,0 +1,10 @@
+<html>
+<head>
+</head>
+<body>
+	<table border="1">
+		<tr><td>Name</td><td>ID</td><td>Level</td></tr>
+		{{range .Items}}<tr><td>{{.Name}}</td><td>{{.DataID}}</td><td>{{.RestrictionLevel}}</td></tr>{{end}}
+	</table>
+</body>
+</html>
