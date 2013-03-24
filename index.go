@@ -186,8 +186,11 @@ func viewSalvageDataHandler(response http.ResponseWriter, request *http.Request)
 	sort.Sort(GW2SpidyItemDataByName{salvageItems})
 	sort.Sort(GW2SpidyItemDataByName{materialItems})
 
+	jsonMaterials, err := json.Marshal(materialItems)
+	handleError(err, response, "Unable to marshal material items")
+
 	// Execute the template with the data so we can show all the data available
-	err = templates.ExecuteTemplate(response, "viewSalvage.html", map[string]interface{}{"Materials": materialItems, "Items": salvageItems})
+	err = templates.ExecuteTemplate(response, "viewSalvage.html", map[string]interface{}{"Materials": string(jsonMaterials), "Items": salvageItems})
 	handleError(err, response, "Unable to execute template")
 }
 
