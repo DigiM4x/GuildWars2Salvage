@@ -1,7 +1,8 @@
 <html>
 <head>
 	<script type="text/javascript">
-		var materials = eval({{.Materials}});
+		var materials = JSON.parse({{.MaterialJSON}});
+		var items = JSON.parse({{.ItemJSON}});
 	</script>
 </head>
 <body>

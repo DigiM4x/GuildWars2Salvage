@@ -8,7 +8,6 @@ import (
 	"labix.org/v2/mgo"
 	"labix.org/v2/mgo/bson"
 	"net/http"
-	"sort"
 	"strconv"
 	"sync"
 )
@@ -130,8 +129,8 @@ func viewSalvageDataHandler(response http.ResponseWriter, request *http.Request)
 	err = collection.Find(nil).All(&salvages)
 	handleError(err, response, "Unable to retrieve salvage data from collection")
 
-	salvageItems := make(GW2SpidyItemDatas, 0, 100)
-	materialItems := make(GW2SpidyItemDatas, 0, 100)
+	salvageItems := map[string]GW2SpidyItemData{}
+	materialItems := map[string]GW2SpidyItemData{}
 	requestURL := GW2SPIDY_URL + "item/"
 	var waitGroup sync.WaitGroup
 
@@ -154,15 +153,18 @@ func viewSalvageDataHandler(response http.ResponseWriter, request *http.Request)
 			err = json.Unmarshal(contents, &item)
 			handleError(err, response, "Unable to Unmarshal contents of response")
 
-			salvageItems = append(salvageItems, item.Result)
+			salvageItems[strconv.Itoa(item.Result.DataID)] = item.Result
 
 			// Retrieve all material data as needed
 			for _, materialItem := range salvageItem.Materials {
-				if isMaterialInSlice(materialItems, materialItem.ID) == false {
-					resp, err := http.Get(requestURL + strconv.Itoa(materialItem.ID))
+				matID := strconv.Itoa(materialItem.ID)
+				_, present := materialItems[matID]
+
+				if present == false {
+					resp, err := http.Get(requestURL + matID)
 
 					if err != nil {
-						fmt.Println("Get request failed with id", materialItem.ID)
+						fmt.Println("Get request failed with id", matID)
 						continue
 					}
 
@@ -175,7 +177,7 @@ func viewSalvageDataHandler(response http.ResponseWriter, request *http.Request)
 					err = json.Unmarshal(contents, &item)
 					handleError(err, response, "Unable to Unmarshal contents of response")
 
-					materialItems = append(materialItems, item.Result)
+					materialItems[matID] = item.Result
 				}
 			}
 			waitGroup.Done()
@@ -183,25 +185,14 @@ func viewSalvageDataHandler(response http.ResponseWriter, request *http.Request)
 	}
 
 	waitGroup.Wait()
-	sort.Sort(GW2SpidyItemDataByName{salvageItems})
-	sort.Sort(GW2SpidyItemDataByName{materialItems})
-
 	jsonMaterials, err := json.Marshal(materialItems)
+	handleError(err, response, "Unable to marshal material items")
+	jsonItems, err := json.Marshal(salvageItems)
 	handleError(err, response, "Unable to marshal material items")
 
 	// Execute the template with the data so we can show all the data available
-	err = templates.ExecuteTemplate(response, "viewSalvage.html", map[string]interface{}{"Materials": string(jsonMaterials), "Items": salvageItems})
+	err = templates.ExecuteTemplate(response, "viewSalvage.html", map[string]interface{}{"MaterialJSON": string(jsonMaterials), "ItemJSON": string(jsonItems), "Items": salvageItems})
 	handleError(err, response, "Unable to execute template")
-}
-
-func isMaterialInSlice(materials []GW2SpidyItemData, data_id int) bool {
-	for _, mat := range materials {
-		if mat.DataID == data_id {
-			return true
-		}
-	}
-
-	return false
 }
 
 ///////////////////////////////////////////////////////////////////////////////
