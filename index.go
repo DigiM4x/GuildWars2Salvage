@@ -8,7 +8,9 @@ import (
 	"labix.org/v2/mgo"
 	"labix.org/v2/mgo/bson"
 	"net/http"
+	"sort"
 	"strconv"
+	"sync"
 )
 
 const (
@@ -29,14 +31,14 @@ var templates = template.Must(template.ParseFiles("main.html", "addSalvage.html"
 
 // Used to retrieve data from the salvage database
 type Salvage struct {
-	ID           string     "ID"
+	ID           int        "ID"
 	SalvageCount int        "SalvageCount"
 	Materials    []Material "Materials"
 }
 
 type Material struct {
-	ID    string "ID"
-	Count int    "Count"
+	ID    int "ID"
+	Count int "Count"
 }
 
 // Used to retrieve lists of items from GW2Spidy
@@ -52,8 +54,8 @@ type GW2SpidyItemResult struct {
 
 // Main struct containing necessary data for items
 type GW2SpidyItemData struct {
-	DataID                   int    `bson:"data_id" json:"data_id"`
-	Name                     string `bson:"name" json:"name"`
+	DataID                   int    `bson:"DataID" json:"data_id"`
+	Name                     string `bson:"Name" json:"name"`
 	Img                      string `bson:"img,omitempty" json:"img"`
 	Rarity                   int    `bson:"rarity,omitempty" json:"rarity"`
 	RestrictionLevel         int    `bson:"restriction_level,omitempty" json:"restriction_level"`
@@ -67,6 +69,17 @@ type GW2SpidyItemData struct {
 	GW2DBExternalID          int    `bson:"gw2db_external_id,omitempty" json:"gw2db_external_id"`
 	SalePriceChangeLastHour  int    `bson:"sale_price_change_last_hour,omitempty" json:"sale_price_change_last_hour"`
 	OfferPriceChangeLastHour int    `bson:"offer_price_change_last_hour,omitempty" json:"offer_price_change_last_hour"`
+}
+
+type GW2SpidyItemDatas []GW2SpidyItemData
+
+func (s GW2SpidyItemDatas) Len() int      { return len(s) }
+func (s GW2SpidyItemDatas) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
+
+type GW2SpidyItemDataByName struct{ GW2SpidyItemDatas }
+
+func (s GW2SpidyItemDataByName) Less(i, j int) bool {
+	return s.GW2SpidyItemDatas[i].DataID < s.GW2SpidyItemDatas[j].DataID
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -117,66 +130,68 @@ func viewSalvageDataHandler(response http.ResponseWriter, request *http.Request)
 	err = collection.Find(nil).All(&salvages)
 	handleError(err, response, "Unable to retrieve salvage data from collection")
 
-	salvageItems := make([]GW2SpidyItemData, 0, 100)
-	materialItems := make([]GW2SpidyItemData, 0, 100)
+	salvageItems := make(GW2SpidyItemDatas, 0, 100)
+	materialItems := make(GW2SpidyItemDatas, 0, 100)
 	requestURL := GW2SPIDY_URL + "item/"
+	var waitGroup sync.WaitGroup
 
-	for _, salvageItem := range salvages {
-		resp, err := http.Get(requestURL + salvageItem.ID)
+	for _, item := range salvages {
+		waitGroup.Add(1)
+		go func(salvageItem Salvage) {
+			resp, err := http.Get(requestURL + strconv.Itoa(salvageItem.ID))
 
-		if err != nil {
-			fmt.Println("Get request failed with id", salvageItem.ID)
-			continue
-		}
-
-		// Read contents of request
-		contents, err := ioutil.ReadAll(resp.Body)
-		handleError(err, response, "Unable to read body of response")
-
-		// Unmarshal JSON into item data
-		item := GW2SpidyItemResult{}
-		err = json.Unmarshal(contents, &item)
-		handleError(err, response, "Unable to Unmarshal contents of response")
-
-		salvageItems = append(salvageItems, item.Result)
-
-		// Retrieve all material data as needed
-		for _, materialItem := range salvageItem.Materials {
-			if isMaterialInSlice(materialItems, materialItem.ID) == false {
-				resp, err := http.Get(requestURL + materialItem.ID)
-
-				if err != nil {
-					fmt.Println("Get request failed with id", materialItem.ID)
-					continue
-				}
-
-				// Read contents of request
-				contents, err := ioutil.ReadAll(resp.Body)
-				handleError(err, response, "Unable to read body of response")
-
-				// Unmarshal JSON into item data
-				item := GW2SpidyItemResult{}
-				err = json.Unmarshal(contents, &item)
-				handleError(err, response, "Unable to Unmarshal contents of response")
-
-				materialItems = append(materialItems, item.Result)
+			if err != nil {
+				fmt.Println("Get request failed with id", salvageItem.ID)
+				return
 			}
-		}
+
+			// Read contents of request
+			contents, err := ioutil.ReadAll(resp.Body)
+			handleError(err, response, "Unable to read body of response")
+
+			// Unmarshal JSON into item data
+			item := GW2SpidyItemResult{}
+			err = json.Unmarshal(contents, &item)
+			handleError(err, response, "Unable to Unmarshal contents of response")
+
+			salvageItems = append(salvageItems, item.Result)
+
+			// Retrieve all material data as needed
+			for _, materialItem := range salvageItem.Materials {
+				if isMaterialInSlice(materialItems, materialItem.ID) == false {
+					resp, err := http.Get(requestURL + strconv.Itoa(materialItem.ID))
+
+					if err != nil {
+						fmt.Println("Get request failed with id", materialItem.ID)
+						continue
+					}
+
+					// Read contents of request
+					contents, err := ioutil.ReadAll(resp.Body)
+					handleError(err, response, "Unable to read body of response")
+
+					// Unmarshal JSON into item data
+					item := GW2SpidyItemResult{}
+					err = json.Unmarshal(contents, &item)
+					handleError(err, response, "Unable to Unmarshal contents of response")
+
+					materialItems = append(materialItems, item.Result)
+				}
+			}
+			waitGroup.Done()
+		}(item)
 	}
+
+	waitGroup.Wait()
+	sort.Sort(GW2SpidyItemDataByName{salvageItems})
+	sort.Sort(GW2SpidyItemDataByName{materialItems})
 
 	// Execute the template with the data so we can show all the data available
 	err = templates.ExecuteTemplate(response, "viewSalvage.html", map[string]interface{}{"Materials": materialItems, "Items": salvageItems})
 	handleError(err, response, "Unable to execute template")
 }
 
-func isMaterialInSlice(materials []GW2SpidyItemData, id string) bool {
-	data_id, err := strconv.Atoi(id)
-
-	if err != nil {
-		fmt.Println("Unable to conver id", id, "to an int.")
-		return true
-	}
-
+func isMaterialInSlice(materials []GW2SpidyItemData, data_id int) bool {
 	for _, mat := range materials {
 		if mat.DataID == data_id {
 			return true
@@ -202,15 +217,15 @@ func libAddSalvageHandler(response http.ResponseWriter, request *http.Request) {
 	// Parse out the query parameters to make them available in the Form
 	request.ParseForm()
 
-	itemID := request.Form.Get("ID")
+	itemID, err := strconv.Atoi(request.Form.Get("ID"))
+	handleError(err, response, "Atoi")
 	salvageCount, err := strconv.Atoi(request.Form.Get("SalvageCount"))
-	handleError(err, response, "Atoi SalvageCount failure")
+	handleError(err, response, "Atoi")
 
-	mat1 := request.Form.Get("material1")
-	mat1Count, _ := strconv.Atoi(request.Form.Get("material1Count"))
-
-	mat2 := request.Form.Get("material2")
-	mat2Count, _ := strconv.Atoi(request.Form.Get("material2Count"))
+	mat1, err := strconv.Atoi(request.Form.Get("material1"))
+	mat1Count, err := strconv.Atoi(request.Form.Get("material1Count"))
+	mat2, err := strconv.Atoi(request.Form.Get("material2"))
+	mat2Count, err := strconv.Atoi(request.Form.Get("material2Count"))
 
 	// Grab our collection
 	c := session.DB(DB_NAME).C(COLLECTION_SALVAGE)
@@ -225,11 +240,11 @@ func libAddSalvageHandler(response http.ResponseWriter, request *http.Request) {
 		result.ID = itemID
 		result.SalvageCount = salvageCount
 
-		if mat1 != "" {
+		if mat1 != 0 {
 			result.Materials = append(result.Materials, Material{ID: mat1, Count: mat1Count})
 		}
 
-		if mat2 != "" {
+		if mat2 != 0 {
 			result.Materials = append(result.Materials, Material{ID: mat2, Count: mat2Count})
 		}
 
@@ -243,11 +258,11 @@ func libAddSalvageHandler(response http.ResponseWriter, request *http.Request) {
 		result.SalvageCount += salvageCount
 		newMatStats := []Material{}
 
-		if mat1 != "" {
+		if mat1 != 0 {
 			newMatStats = append(result.Materials, Material{ID: mat1, Count: mat1Count})
 		}
 
-		if mat2 != "" {
+		if mat2 != 0 {
 			newMatStats = append(result.Materials, Material{ID: mat2, Count: mat2Count})
 		}
 
@@ -285,7 +300,7 @@ func libAddSalvageHandler(response http.ResponseWriter, request *http.Request) {
 func handleError(err error, response http.ResponseWriter, message string) {
 	if err != nil {
 		http.Error(response, err.Error(), http.StatusInternalServerError)
-		panic(message)
+		panic(message + err.Error())
 	}
 }
 

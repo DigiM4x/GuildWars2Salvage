@@ -5,8 +5,8 @@
 	<form method='POST' action='lib/addSalvage'>
 		ID: <input type='text' name='ID' /> <br />
 		# of Salvages: <input type='text' name='SalvageCount' /> <br />
-		<select name='material1'><option value='' selected='true'>None</option>{{range .Materials}}<option value='{{.DataID}}'>{{.Name}}</option>{{end}}</select> <input type='text' name='material1Count' /><br />
-		<select name='material2'><option value='' selected='true'>None</option>{{range .Materials}}<option value='{{.DataID}}'>{{.Name}}</option>{{end}}</select> <input type='text' name='material2Count' /><br />
+		<select name='material1'><option value='' selected='true'>None</option>{{range .Materials}}<option value='{{.DataID}}'>{{.Name}}: {{.DataID}}</option>{{end}}</select> <input type='text' name='material1Count' /><br />
+		<select name='material2'><option value='' selected='true'>None</option>{{range .Materials}}<option value='{{.DataID}}'>{{.Name}}: {{.DataID}}</option>{{end}}</select> <input type='text' name='material2Count' /><br />
 		<input type='submit' /><br />
 	</form>
 </body>
